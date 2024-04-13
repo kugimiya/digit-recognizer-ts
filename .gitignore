@@ -1,0 +1,3 @@
+node_modules
+dist
+trained_weights.json
