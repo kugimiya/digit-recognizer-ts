@@ -1,39 +1,54 @@
-import { rmSync, writeFileSync } from 'node:fs';
-import { Trainer } from "./lib/Trainer";
-import { Network } from "./lib/Network";
+import { readFileSync } from 'node:fs';
 import path from "node:path";
+import { Network } from "./lib/Network";
 
 // Инит тредов для параллельной работы
-const worker_farm = require('worker-farm');
-const farm = worker_farm({ maxConcurrentCallsPerWorker: 1, autoStart: true }, path.resolve(__dirname, 'lib/Worker'));
+// const worker_farm = require('worker-farm');
+// const farm = worker_farm({ maxConcurrentCallsPerWorker: 1, autoStart: false }, path.resolve(__dirname, 'lib/Worker'));
 
-// максимум "эпох"
-const MAX_EPOCHS = 2;
-// кол-во микро-мутаций при переходе в датасете
-const MAX_MUTATIONS_VARIANTS = 16;
+const dataset = readFileSync(path.resolve(__dirname, '..', 'mnist_digits_dataset.csv'))
+  .toString()
+  .split('\n')
+  .slice(2, -2)
+  .map((line) => JSON.parse(`[${line}]`) as Array<number>)
+  .map(([digit, ...array]) => ({
+    digit,
+    input: array.map(v => v / 255),
+    output: [
+      digit === 0 ? 1 : 0,
+      digit === 1 ? 1 : 0,
+      digit === 2 ? 1 : 0,
+      digit === 3 ? 1 : 0,
+      digit === 4 ? 1 : 0,
+      digit === 5 ? 1 : 0,
+      digit === 6 ? 1 : 0,
+      digit === 7 ? 1 : 0,
+      digit === 8 ? 1 : 0,
+      digit === 9 ? 1 : 0,
+    ]
+  }));
 
-// Инит обучалки
-console.log('INFO: reading dataset');
-const trainer = new Trainer(path.resolve(__dirname, '../mnist_digits_dataset.csv'), farm);
+function run_dataset(origin_network: Network, dataset: { digit: number, input: number[], output: number[] }[]) {
+  let errors: number[] = [];
+  let networks: Network[] = [];
+  let common_error = 0;
 
-// Инит пустой нейронки
-console.log('INFO: making network');
-const network = new Network();
-network.make([784, 784 / 2, 784 / 4, 784 / 8, 784 / 16, 10]);
-
-// Запуск обучалки, в конце будет получена обученная нейронка и записана в файл
-console.log('INFO: training network');
-trainer.train_network(MAX_EPOCHS, MAX_MUTATIONS_VARIANTS, network).then(coolest_network => {
-  try {
-    rmSync(path.resolve(__dirname, '../trained_weights.json'));
-  } catch {}
-
-  try {
-    writeFileSync(path.resolve(__dirname, '../trained_weights.json'), JSON.stringify(coolest_network.layers));
-  } catch {}
-
-  trainer.dataset.forEach(({ digit, inputs }) => {
-    let runned = Network.run(coolest_network.layers, inputs);
-    console.log(digit, runned.layers.at(-1)?.neurons_out_values.map(i => Math.round(i * 10000) / 10000));
+  dataset.forEach(({ input, output }) => {
+    const network = origin_network.clone();
+    network.run(input);
+    const error = network.get_error(output);
+    common_error = common_error + error;
+    networks.push(network);
+    errors.push(error);
   });
-});
+
+  common_error = common_error / errors.length;
+
+  return { common_error, errors, networks };
+}
+
+let network = new Network([784, 16, 16, 10]);
+network.randomize();
+const result = run_dataset(network, dataset);
+
+console.log(result.common_error);

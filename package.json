@@ -12,8 +12,6 @@
   "license": "ISC",
   "dependencies": {
     "@types/node": "^20.12.7",
-    "comedy": "^2.1.7",
-    "thweads": "^1.0.0",
     "typescript": "^5.4.5",
     "worker-farm": "^1.7.0"
   }

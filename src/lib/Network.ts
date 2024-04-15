@@ -1,104 +1,86 @@
-export type Weight = {
-  value: number;
-  layer: number;
-  from_neuron_index: number;
-  to_neuron_index: number;
-}
-
-export enum LayerType {
-  Input,
-  Output,
-  Hidden
-}
-
 export type Layer = {
-  value: number;
-  neurons_count: number;
-  neurons_out_values: number[];
-  type: LayerType;
-  weights: Weight[];
+  neuron_biases: number[];
+  out_weights: number[];
 }
 
-export function deep_clone<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj));
+export type LayerResult = {
+  input_sums: number[];
+  activations: number[];
 }
+
+export const sigmoid = (x: number) => {
+  return Math.exp(x) / (Math.exp(x) + 1)
+};
 
 export class Network {
   layers: Layer[] = [];
+  layers_results: LayerResult[] = [];
 
-  make(layers_neurons_counts: number[]) {
-    console.log('INFO: making network');
+  constructor(neurons_counts: number[]) {
+    for (let i = 0; i < neurons_counts.length; i++) {
+      const weights_count = i === neurons_counts.length - 1
+        ? 0
+        : neurons_counts[i] * neurons_counts[i + 1];
 
-    const layers_count = layers_neurons_counts.length;
+      this.layers.push({
+        neuron_biases: new Array(neurons_counts[i]).fill(0),
+        out_weights: new Array(weights_count).fill(0)
+      });
 
-    this.layers = layers_neurons_counts.map((neurons_count: number, index) => {
-      const type: Layer['type'] = index === 0 ? LayerType.Input : index !== layers_count - 1 ? LayerType.Output : LayerType.Hidden;
-      const weights: Weight[] = [];
-      const neurons_out_values: number[] = new Array<number>(neurons_count).fill(0);
+      this.layers_results.push({
+        input_sums: new Array(neurons_counts[i]).fill(0),
+        activations: new Array(neurons_counts[i]).fill(0)
+      });
+    }
+  }
 
-      if (type !== LayerType.Input) {
-        const prev_layer_neurons_counts = layers_neurons_counts[index - 1];
-        for (let to_neuron_index = 0; to_neuron_index < neurons_count; to_neuron_index++) {
-          for (let from_neuron_index = 0; from_neuron_index < prev_layer_neurons_counts; from_neuron_index++) {
-            weights.push({ value: 0, layer: index, from_neuron_index, to_neuron_index });
-          }
-        }
-      }
-
-      return ({
-        value: index,
-        type,
-        neurons_count,
-        neurons_out_values,
-        weights,
-      }) as Layer;
+  randomize() {
+    this.layers.forEach((layer) => {
+      layer.out_weights = layer.out_weights.map(() => Math.random() - 0.5);
+      layer.neuron_biases = layer.neuron_biases.map(() => Math.random() - 0.5);
     });
   }
 
-  static mutate(layers: Layer[]): Network {
-    const network = new Network();
-    let cloned = deep_clone(layers);
+  run(input: number[]) {
+    // set input as activations of first layer
+    input.forEach((value, index) => {
+      this.layers_results[0].activations[index] = value;
+    });
 
-    for (let layer_index = 0; layer_index < cloned.length; layer_index++) {
-      cloned[layer_index].weights = cloned[layer_index].weights.map(w => ({ ...w, value: w.value + ((Math.random() / 100) - 0.005) }));
-    }
+    // feed layers :^)
+    for (let layer_index = 1; layer_index < this.layers.length; layer_index++) {
+      let previous_activations = this.layers_results[layer_index - 1].activations;
 
-    network.layers = cloned;
+      for (let neuron_index = 0; neuron_index < this.layers[layer_index].neuron_biases.length; neuron_index++) {
+        const weight_offset = neuron_index * this.layers[layer_index - 1].neuron_biases.length;
+        const bias = this.layers[layer_index].neuron_biases[neuron_index];
+        const input_sum = previous_activations
+          .map((value, index) => value * this.layers[layer_index - 1].out_weights[weight_offset + index])
+          .reduce((acc, val) => acc + val, 0);
 
-    return network;
-  }
-
-  static activation_function_sigmoid(x: number) {
-    return 1 / (1 + Math.pow(Math.E, -1 * x));
-  }
-
-  static clone(layers: Layer[]): Network {
-    const network = new Network();
-    let cloned = deep_clone(layers);
-    network.layers = cloned;
-    return network;
-  }
-
-  static run(layers: Layer[], input_values: number[]): Network {
-    const network = new Network();
-    let cloned = deep_clone(layers);
-    cloned[0].neurons_out_values = cloned[0].neurons_out_values.map((_, index) => input_values[index]);
-
-    for (let i = 1; i < cloned.length; i++) {
-      let layer = cloned[i];
-      let prev_layer = cloned[i - 1];
-
-      for (let neuron_index = 0; neuron_index < layer.neurons_count; neuron_index++) {
-        const related_weights = layer.weights.filter(weight => weight.to_neuron_index === neuron_index);
-        const input_value_summa = related_weights.reduce((acc, cur_weight) => {
-          acc += prev_layer.neurons_out_values[cur_weight.from_neuron_index] * cur_weight.value;
-          return acc;
-        }, 0);
-        layer.neurons_out_values[neuron_index] = Network.activation_function_sigmoid(input_value_summa);
+        const pre_activation = input_sum + bias;
+        this.layers_results[layer_index].input_sums[neuron_index] = pre_activation;
+        this.layers_results[layer_index].activations[neuron_index] = sigmoid(pre_activation);
       }
     }
+  }
 
-    network.layers = cloned;
-    return network;
+  get_result_softed() {
+    return (this.layers_results.at(-1)?.activations || []).map(v => Math.floor(v * 10) / 10);
+  }
+
+  get_error(output: number[]) {
+    return (this.layers_results.at(-1)?.activations || [] as number[])
+      .map((value, index) => {
+        return (value + output[index]) * (value + output[index]);
+      })
+      .reduce((acc, val) => acc + val, 0);
+  }
+
+  clone(): Network {
+    const next_net = new Network(this.layers.map(_ => _.neuron_biases.length));
+    next_net.layers = this.layers.map((l) => ({ neuron_biases: l.neuron_biases.slice(0), out_weights: l.out_weights.slice(0) }));
+    next_net.layers_results = this.layers_results.map((r) => ({ input_sums: r.input_sums.slice(0), activations: r.activations.slice(0) }));
+    return next_net;
   }
 }
