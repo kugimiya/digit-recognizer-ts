@@ -91,6 +91,13 @@ let learn_rate = 0.001;
 let nice_ratio = 0.955;
 let prev_ratio = 0;
 
+try {
+  const trained = JSON.parse( readFileSync(path.resolve(__dirname, '..', 'weights.json')).toString() ) as Network;
+  network.layers = trained.layers;
+} catch (e) {
+  console.log('Looks like first run :thinking:');
+}
+
 while (prev_ratio < nice_ratio) {
   console.log('Start training');
 
@@ -118,5 +125,7 @@ while (prev_ratio < nice_ratio) {
   console.log(`Test done! True predictions: ${true_predictions} of ${test_dataset.length} ratio=${prev_ratio}`);
   if (prev_ratio < nice_ratio) {
     console.log(`Ratio (${prev_ratio} is not nice (${nice_ratio}), start training again...`);
+  } else {
+    console.log(`Ratio is good, terminate training`);
   }
 }
