@@ -85,17 +85,17 @@ function run_dataset(origin_network: Network, dataset: { digit: number, input: n
 let network = new Network([784, 784 / 2, 784 / 4, 784 / 8, 784 / 16, 10]);
 network.randomize();
 
-let epoch_count = 1024;
+let epoch_count = 100;
 let batch_size = 100;
 let learn_rate = 0.001;
-let nice_ratio = 0.95;
+let nice_ratio = 0.955;
 let prev_ratio = 0;
 
 while (prev_ratio < nice_ratio) {
   console.log('Start training');
 
   for (let i = 0; i < epoch_count; i++) {
-    console.log(`Run iteration: ${i + 1} of ${epoch_count}, with batch_size=${batch_size} ...`);
+    console.log(`Run epoch: ${i + 1} of ${epoch_count}, with batch_size=${batch_size} ...`);
     const result = run_dataset(network, getShuffledArr(train_dataset).slice(0, batch_size), learn_rate);
     network = result.network;
     console.log(`... completed, with avg_error=${result.common_error}, true_pred=${result.true_predictions} / ${batch_size}\n`);
