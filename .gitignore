@@ -2,3 +2,4 @@ node_modules
 dist
 dist-front
 .idea
+.DS_Store

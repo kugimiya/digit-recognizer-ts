@@ -1,8 +1,8 @@
 export type Layer = {
   size: number;
-  biases: number[];
-  weights: number[][];
-  activations: number[];
+  biases: Float64Array;
+  weights: Float64Array[];
+  activations: Float64Array;
 }
 
 export const sigmoid = (x: number) => {
@@ -26,9 +26,11 @@ export class Network {
 
       this.layers[i] = {
         size: neurons_counts[i],
-        biases: new Array(neurons_counts[i]).fill(0),
-        weights: new Array(neurons_counts[i]).fill(0).map(() => new Array(nextSize).fill(0)),
-        activations: new Array(neurons_counts[i]).fill(0)
+        biases: new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * neurons_counts[i])).fill(0.0),
+        weights: new Array(neurons_counts[i]).fill(0).map(() => (
+          new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * nextSize)).fill(0.0)
+        )),
+        activations: new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * neurons_counts[i])).fill(0.0)
       };
     }
   }
@@ -55,7 +57,7 @@ export class Network {
     return this.layers.at(-1) as Layer;
   }
 
-  feed_forward(input: number[]) {
+  async feed_forward(input: number[]) {
     // set input as activations of first layer
     input.forEach((value, index) => {
       this.layers[0].activations[index] = value;
@@ -122,7 +124,13 @@ export class Network {
           next_weights[j][i] = current_layer.weights[j][i] + deltas[i][j];
         }
       }
-      current_layer.weights = next_weights.slice(0).map(_ => _.slice(0));
+
+      // current_layer.weights = next_weights.slice(0).map(_ => _.slice(0));
+      next_weights.forEach((neuron_input_weights, neuron_index) => {
+        neuron_input_weights.forEach((weight, weight_index) => {
+          current_layer.weights[neuron_index][weight_index] = weight;
+        });
+      });
 
       // apply gradients to biases
       for (let i = 0; i < prev_layer.size; i++) {
@@ -160,7 +168,7 @@ export class Network {
     this.layers = this.layers.map((l) => ({
       biases: l.biases.slice(0),
       weights: l.weights.slice(0).map(_ => _.slice(0)),
-      activations: new Array(l.activations.length).fill(0),
+      activations: new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * l.activations.length)).fill(0.0),
       size: l.size,
     }));
     return this;
