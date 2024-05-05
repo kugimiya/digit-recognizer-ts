@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from "node:path";
-import { Network } from "./lib/Network";
+import { ETP_Params, Network } from "./lib/Network";
+import { ETP } from "etp-ts";
+import { cpus } from "node:os";
 
 const getShuffledArr = <T>(arr: T[]): T[] => {
   const newArr = arr.slice(0);
@@ -58,6 +60,13 @@ console.log('Load datasets...');
 const train_dataset = load_datasets(train_datasets_file_names);
 const test_dataset = load_datasets(test_datasets_file_names);
 
+async function main([ action_type ]: ETP_Params) {
+  console.log(action_type);
+  return 0;
+}
+
+const etp = new ETP(cpus().length, main);
+
 async function run_dataset(origin_network: Network, dataset: { digit: number, input: number[], output: number[] }[], learn_rate: number) {
   let time = {
     run: Date.now(),
@@ -91,7 +100,7 @@ async function run_dataset(origin_network: Network, dataset: { digit: number, in
     }
 
     time.train = Date.now();
-    network.back_propagation(learn_rate, output);
+    network.back_propagation(learn_rate, output, etp);
     time.train_delta += Date.now() - time.train;
   }
 
@@ -111,20 +120,21 @@ console.log('Load/create network...');
 let network = new Network([784, 784 * 2, 784 * 2, 128, 10]);
 network.randomize();
 
-let epoch_count = 100;
+let epoch_count = 5;
 let batch_size = 100;
 let learn_rate = 0.001;
 let nice_ratio = 0.98;
 let prev_ratio = 0;
 
 try {
-  const trained = JSON.parse( readFileSync(path.resolve(__dirname, '..', 'weights.json')).toString() ) as Network;
-  network.layers = trained.layers;
+  network.asJSON = readFileSync(path.resolve(__dirname, '..', 'weights.json')).toString();
 } catch (e) {
   console.log('Looks like first run :thinking:');
 }
 
-const main = async() => {
+const runner = async() => {
+  await etp.init();
+
   while (prev_ratio < nice_ratio) {
     console.log('Start training');
 
@@ -137,7 +147,7 @@ const main = async() => {
       console.log(`... completed, with avg_error=${result.common_error}, true_pred=${result.true_predictions} / ${batch_size}\n`);
     }
 
-    writeFileSync(path.resolve(__dirname, '..', 'weights.json'), JSON.stringify(network.clone().clear()));
+    writeFileSync(path.resolve(__dirname, '..', 'weights.json'), network.asJSON);
 
     console.log('Run test dataset');
 
@@ -160,4 +170,4 @@ const main = async() => {
   }
 }
 
-main();
+runner();
