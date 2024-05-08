@@ -101,17 +101,17 @@ export class Network {
     });
 
     // feed layers :^)
+    let next = 0;
     for (let i = 1; i < this.layers.length; i++)  {
       let prev_layer = this.layers[i - 1];
       let curr_layer = this.layers[i];
 
       for (let j = 0; j < curr_layer.size; j++) {
-        curr_layer.activations[j] = 0;
+        next = curr_layer.biases[j];
         for (let k = 0; k < prev_layer.size; k++) {
-          curr_layer.activations[j] += prev_layer.activations[k] * prev_layer.weights[k][j];
+          next += prev_layer.activations[k] * prev_layer.weights[k][j];
         }
-        curr_layer.activations[j] += curr_layer.biases[j];
-        curr_layer.activations[j] = sigmoid(curr_layer.activations[j]);
+        curr_layer.activations[j] = sigmoid(next);
       }
     }
   }
@@ -128,14 +128,12 @@ export class Network {
       let current_layer = this.layers[layer_index];
       let prev_layer = this.layers[layer_index + 1];
 
-      let gradients: number[] = new Array(prev_layer.size).fill(0);
-      let deltas: number[][] = new Array(prev_layer.size).fill(0).map(() => new Array(current_layer.size).fill(0));
-      let next_weights: number[][] = new Array(current_layer.weights.length).fill(0).map(() => new Array(current_layer.weights[0].length).fill(0));
+      let gradients: Float64Array = new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * prev_layer.size)).fill(0.0);
+      let deltas: Float64Array[] = new Array(prev_layer.size).fill(0).map(() => new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * current_layer.size)).fill(0.0));
 
       // calc gradients
       for (let i = 0; i < prev_layer.size; i++) {
-        gradients[i] = errors[i] * sigmoid_prime(prev_layer.activations[i]);
-        gradients[i] *= learn_rate;
+        gradients[i] = errors[i] * sigmoid_prime(prev_layer.activations[i]) * learn_rate;
       }
 
       // calc deltas
@@ -159,16 +157,9 @@ export class Network {
       // calc/apply new weights
       for (let i = 0; i < prev_layer.size; i++) {
         for (let j = 0; j < current_layer.size; j++) {
-          next_weights[j][i] = current_layer.weights[j][i] + deltas[i][j];
+          current_layer.weights[j][i] += deltas[i][j];
         }
       }
-
-      // current_layer.weights = next_weights.slice(0).map(_ => _.slice(0));
-      next_weights.forEach((neuron_input_weights, neuron_index) => {
-        neuron_input_weights.forEach((weight, weight_index) => {
-          current_layer.weights[neuron_index][weight_index] = weight;
-        });
-      });
 
       // apply gradients to biases
       for (let i = 0; i < prev_layer.size; i++) {

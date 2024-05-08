@@ -117,19 +117,20 @@ async function run_dataset(origin_network: Network, dataset: { digit: number, in
 
 console.log('Load/create network...');
 
-let network = new Network([784, 784 * 2, 784 * 2, 128, 10]);
+let net_conf = [784, 256, 64, 10];
+let network = new Network(net_conf);
 network.randomize();
 
-let epoch_count = 5;
+let epoch_count = 100;
 let batch_size = 100;
 let learn_rate = 0.001;
 let nice_ratio = 0.98;
 let prev_ratio = 0;
 
 try {
-  network.asJSON = readFileSync(path.resolve(__dirname, '..', 'weights.json')).toString();
+  network.asJSON = readFileSync(path.resolve(__dirname, '..', `weights_${net_conf.join('_')}.json`)).toString();
 } catch (e) {
-  console.log('Looks like first run :thinking:');
+  console.log(`Failed loading "weights_${net_conf.join('_')}.json". Looks like first run :thinking:`);
 }
 
 const runner = async() => {
@@ -139,15 +140,15 @@ const runner = async() => {
     console.log('Start training');
 
     for (let i = 0; i < epoch_count; i++) {
-      // batch_size = Math.round(train_dataset.length / epoch_count * (i + 1));
+      batch_size = Math.round(train_dataset.length / epoch_count * (i + 1));
       console.log(`Run epoch: ${i + 1} of ${epoch_count}, with batch_size=${batch_size} ...`);
       const result = await run_dataset(network, getShuffledArr(train_dataset).slice(0, batch_size), learn_rate);
       network = result.network;
       console.log(`sample train time avg: ${result.train_delta}ms, sample run time avg: ${result.run_delta}ms`);
-      console.log(`... completed, with avg_error=${result.common_error}, true_pred=${result.true_predictions} / ${batch_size}\n`);
+      console.log(`... completed, with avg_error=${result.common_error}, ratio: ${result.true_predictions / batch_size}, true_pred=${result.true_predictions} / ${batch_size}\n`);
     }
 
-    writeFileSync(path.resolve(__dirname, '..', 'weights.json'), network.asJSON);
+    writeFileSync(path.resolve(__dirname, '..', `weights_${net_conf.join('_')}.json`), network.asJSON);
 
     console.log('Run test dataset');
 
