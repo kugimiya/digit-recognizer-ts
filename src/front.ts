@@ -15,9 +15,11 @@ let draw = false;
 let cX = 0;
 let cY = 0;
 
-fetch('/weights.json').then(res => res.json()).then((data) => {
-  const network = new Network([784, 784 / 2, 784 / 4, 784 / 8, 784 / 16, 10]);
-  network.layers = data.layers;
+let net_conf = [784, 256, 64, 10];
+
+fetch(`weights_${net_conf.join('_')}.json`).then(res => res.json()).then((data) => {
+  const network = new Network(net_conf);
+  network.asJSON = JSON.stringify(data);
 
   ready = true;
 

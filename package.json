@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "tsc && node dist/index.js",
     "build": "tsc",
-    "run-front": "tsc --project tsconfig.front.json && npx serve ."
+    "run-front": "tsc --project tsconfig.front.json && npx serve --ssl-cert serve-https-keys/cert.pem --ssl-key serve-https-keys/key.pem ."
   },
   "keywords": [],
   "author": "",
