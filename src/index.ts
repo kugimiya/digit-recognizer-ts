@@ -140,7 +140,7 @@ const runner = async() => {
     console.log('Start training');
 
     for (let i = 0; i < epoch_count; i++) {
-      batch_size = Math.round(train_dataset.length / epoch_count * (i + 1));
+      // batch_size = Math.round(train_dataset.length / epoch_count * (i + 1));
       console.log(`Run epoch: ${i + 1} of ${epoch_count}, with batch_size=${batch_size} ...`);
       const result = await run_dataset(network, getShuffledArr(train_dataset).slice(0, batch_size), learn_rate);
       network = result.network;
