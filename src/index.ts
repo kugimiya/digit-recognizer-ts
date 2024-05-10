@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import path from "node:path";
 import { ETP_Params, Network } from "./lib/Network";
 import { ETP } from "etp-ts";
@@ -67,7 +67,7 @@ async function main([ action_type ]: ETP_Params) {
 
 const etp = new ETP(cpus().length, main);
 
-async function run_dataset(origin_network: Network, dataset: { digit: number, input: number[], output: number[] }[], learn_rate: number) {
+async function run_dataset(origin_network: Network, dataset: { digit: number, input: number[], output: number[] }[], learn_rate: number, true_predicate: number) {
   let time = {
     run: Date.now(),
     run_delta: 0,
@@ -91,7 +91,7 @@ async function run_dataset(origin_network: Network, dataset: { digit: number, in
     common_error = common_error + error;
     errors.push(error);
 
-    const result = network.get_result_softed().map((v) => v > 0.5 ? 1 as number : 0 as number);
+    const result = network.get_result_softed().map((v) => v > true_predicate ? 1 as number : 0 as number);
 
     if (result[digit] === 1 && result.reduce((a, c) => a + c, 0) === 1) {
       true_predictions += 1;
@@ -124,14 +124,23 @@ network.randomize();
 let epoch_count = 100;
 let batch_size = 100;
 let learn_rate = 0.001;
-let nice_ratio = 0.98;
+let nice_ratio = 0.985;
 let prev_ratio = 0;
+let true_predicate = 0.5;
 
 try {
   network.asJSON = readFileSync(path.resolve(__dirname, '..', `weights_${net_conf.join('_')}.json`)).toString();
 } catch (e) {
   console.log(`Failed loading "weights_${net_conf.join('_')}.json". Looks like first run :thinking:`);
 }
+
+let train_count = 0;
+let test_count = 0;
+let train_stat_name = `${Date.now()}_stat_train_${net_conf.join('_')}.csv`;
+let test_stat_name = `${Date.now()}_stat_test_${net_conf.join('_')}.csv`;
+
+writeFileSync(train_stat_name, 'run,err,ratio\n');
+writeFileSync(test_stat_name, 'run,ratio\n');
 
 const runner = async() => {
   await etp.init();
@@ -142,10 +151,13 @@ const runner = async() => {
     for (let i = 0; i < epoch_count; i++) {
       // batch_size = Math.round(train_dataset.length / epoch_count * (i + 1));
       console.log(`Run epoch: ${i + 1} of ${epoch_count}, with batch_size=${batch_size} ...`);
-      const result = await run_dataset(network, getShuffledArr(train_dataset).slice(0, batch_size), learn_rate);
+      const result = await run_dataset(network, getShuffledArr(train_dataset).slice(0, batch_size), learn_rate, true_predicate);
       network = result.network;
       console.log(`sample train time avg: ${result.train_delta}ms, sample run time avg: ${result.run_delta}ms`);
       console.log(`... completed, with avg_error=${result.common_error}, ratio: ${result.true_predictions / batch_size}, true_pred=${result.true_predictions} / ${batch_size}\n`);
+
+      train_count += 1;
+      appendFileSync(train_stat_name, `${train_count},${result.common_error},${result.true_predictions / batch_size}\n`);
     }
 
     writeFileSync(path.resolve(__dirname, '..', `weights_${net_conf.join('_')}.json`), network.asJSON);
@@ -155,7 +167,7 @@ const runner = async() => {
     let true_predictions = 0;
     test_dataset.forEach(({ input, digit }) => {
       network.feed_forward(input);
-      const result = network.get_result_softed().map((v) => v > 0.5 ? 1 as number : 0 as number);
+      const result = network.get_result_softed().map((v) => v > true_predicate ? 1 as number : 0 as number);
       if (result[digit] === 1 && result.reduce((a, c) => a + c, 0) === 1) {
         true_predictions += 1;
       }
@@ -168,6 +180,9 @@ const runner = async() => {
     } else {
       console.log(`Ratio is good, terminate training`);
     }
+
+    test_count += 1;
+    appendFileSync(test_stat_name, `${test_count},${prev_ratio}\n`);
   }
 }
 

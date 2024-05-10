@@ -3,3 +3,4 @@ dist
 dist-front
 .idea
 .DS_Store
+*.csv

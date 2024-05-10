@@ -171,7 +171,7 @@ export class Network {
   }
 
   get_result_softed() {
-    return (this.last_layer.activations || []).map(v => Math.floor(v * 10) / 10);
+    return (this.last_layer.activations || []).map(v => Math.floor(v * 100) / 100);
   }
 
   get_error(output: number[]) {
