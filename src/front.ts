@@ -15,7 +15,7 @@ let draw = false;
 let cX = 0;
 let cY = 0;
 
-let net_conf = [784, 256, 64, 10];
+let net_conf = [784, 512, 256, 64, 10];
 
 fetch(`weights_${net_conf.join('_')}.json`).then(res => res.json()).then((data) => {
   const network = new Network(net_conf);

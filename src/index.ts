@@ -117,16 +117,16 @@ async function run_dataset(origin_network: Network, dataset: { digit: number, in
 
 console.log('Load/create network...');
 
-let net_conf = [784, 256, 64, 10];
+let net_conf = [784, 512, 256, 64, 10];
 let network = new Network(net_conf);
 network.randomize();
 
 let epoch_count = 100;
 let batch_size = 100;
-let learn_rate = 0.001;
+let learn_rate = 0.0001;
 let nice_ratio = 0.985;
 let prev_ratio = 0;
-let true_predicate = 0.5;
+let true_predicate = 0.85;
 
 try {
   network.asJSON = readFileSync(path.resolve(__dirname, '..', `weights_${net_conf.join('_')}.json`)).toString();
@@ -139,8 +139,8 @@ let test_count = 0;
 let train_stat_name = `${Date.now()}_stat_train_${net_conf.join('_')}.csv`;
 let test_stat_name = `${Date.now()}_stat_test_${net_conf.join('_')}.csv`;
 
-writeFileSync(train_stat_name, 'run,err,ratio\n');
-writeFileSync(test_stat_name, 'run,ratio\n');
+writeFileSync(train_stat_name, 'run;err;ratio\n');
+writeFileSync(test_stat_name, 'run;ratio\n');
 
 const runner = async() => {
   await etp.init();
@@ -157,7 +157,7 @@ const runner = async() => {
       console.log(`... completed, with avg_error=${result.common_error}, ratio: ${result.true_predictions / batch_size}, true_pred=${result.true_predictions} / ${batch_size}\n`);
 
       train_count += 1;
-      appendFileSync(train_stat_name, `${train_count},${result.common_error},${result.true_predictions / batch_size}\n`);
+      appendFileSync(train_stat_name, `${train_count};${result.common_error.toString().replace('.', ',')};${(result.true_predictions / batch_size).toString().replace('.', ',')}\n`);
     }
 
     writeFileSync(path.resolve(__dirname, '..', `weights_${net_conf.join('_')}.json`), network.asJSON);
@@ -182,7 +182,7 @@ const runner = async() => {
     }
 
     test_count += 1;
-    appendFileSync(test_stat_name, `${test_count},${prev_ratio}\n`);
+    appendFileSync(test_stat_name, `${test_count};${prev_ratio.toString().replace('.', ',')}\n`);
   }
 }
 

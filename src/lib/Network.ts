@@ -3,7 +3,7 @@ import { ETP } from "etp-ts";
 export type Layer = {
   size: number;
   biases: Float64Array;
-  weights: Float64Array[];
+  weights: Float64Array;
   activations: Float64Array;
 }
 
@@ -29,23 +29,24 @@ export const sigmoid_prime = (x: number) => {
 
 export class Network {
   layers: Layer[] = [];
+  next_sizes: number[] = [];
 
   constructor(neurons_counts: number[]) {
     for (let i = 0; i < neurons_counts.length; i++) {
-      let nextSize = 0;
+      let next_size = 0;
 
       if (i < neurons_counts.length - 1) {
-        nextSize = neurons_counts[i + 1];
+        next_size = neurons_counts[i + 1];
       }
 
       this.layers[i] = {
         size: neurons_counts[i],
-        activations: new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * neurons_counts[i])).fill(0),
-        biases: new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * neurons_counts[i])).fill(0),
-        weights: new Array(neurons_counts[i]).fill(0).map(() => (
-          new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * nextSize)).fill(0)
-        )),
+        activations: new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * neurons_counts[i])).fill(0.0),
+        biases: new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * neurons_counts[i])).fill(0.0),
+        weights: new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * neurons_counts[i] * next_size)).fill(0.0),
       };
+
+      this.next_sizes[i] = next_size;
     }
   }
 
@@ -58,10 +59,11 @@ export class Network {
       }
 
       for (let j = 0; j < this.layers[i].size; j++) {
+        const offset = this.next_sizes[i] * j;
         this.layers[i].biases[j] = Math.random() * 2.0 - 1.0;
 
         for (let k = 0; k < nextSize; k++) {
-          this.layers[i].weights[j][k] = Math.random() * 2.0 - 1.0;
+          this.layers[i].weights[offset + k] = Math.random() * 2.0 - 1.0;
         }
       }
     }
@@ -69,12 +71,12 @@ export class Network {
 
   get asJSON() {
     return JSON.stringify(
-      this.layers.map(layer => [layer.size, [...layer.biases], [...layer.weights.map(neuron_weights => [...neuron_weights])]])
+      this.layers.map(layer => [layer.size, [...layer.biases], [...layer.weights]])
     );
   }
 
   set asJSON(json: string) {
-    const raw: [number, number[], number[][]][] = JSON.parse(json);
+    const raw: [number, number[], number[]][] = JSON.parse(json);
     raw.forEach(([size, biases, weights], layer_index) => {
       this.layers[layer_index].size = size;
 
@@ -83,9 +85,7 @@ export class Network {
       });
 
       weights.forEach((neuron_weights, index) => {
-        neuron_weights.forEach((weight, w_index) => {
-          this.layers[layer_index].weights[index][w_index] = weight;
-        });
+        this.layers[layer_index].weights[index] = neuron_weights;
       });
     });
   }
@@ -109,7 +109,7 @@ export class Network {
       for (let j = 0; j < curr_layer.size; j++) {
         next = curr_layer.biases[j];
         for (let k = 0; k < prev_layer.size; k++) {
-          next += prev_layer.activations[k] * prev_layer.weights[k][j];
+          next += prev_layer.activations[k] * prev_layer.weights[this.next_sizes[i - 1] * k + j];
         }
         curr_layer.activations[j] = sigmoid(next);
       }
@@ -118,7 +118,7 @@ export class Network {
 
   back_propagation(learn_rate: number, output: number[], etp: ETP<ETP_Params, number>): Network {
     // calc errors
-    let errors = new Array(this.last_layer.size).fill(0);
+    let errors = new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * this.last_layer.size)).fill(0.0);
     for (let i = 0; i < this.last_layer.size; i++) {
       errors[i] = output[i] - this.last_layer.activations[i];
     }
@@ -128,8 +128,9 @@ export class Network {
       let current_layer = this.layers[layer_index];
       let prev_layer = this.layers[layer_index + 1];
 
-      let gradients: Float64Array = new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * prev_layer.size)).fill(0.0);
-      let deltas: Float64Array[] = new Array(prev_layer.size).fill(0).map(() => new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * current_layer.size)).fill(0.0));
+      let gradients = new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * prev_layer.size)).fill(0.0);
+      let new_deltas = new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * prev_layer.size * current_layer.size)).fill(0.0);
+      let next_errors = new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * current_layer.size)).fill(0.0);
 
       // calc gradients
       for (let i = 0; i < prev_layer.size; i++) {
@@ -137,27 +138,27 @@ export class Network {
       }
 
       // calc deltas
+      let offset = 0;
       for (let i = 0; i < prev_layer.size; i++) {
+        offset = i * current_layer.size;
         for (let j = 0; j < current_layer.size; j++) {
-          deltas[i][j] = gradients[i] * current_layer.activations[j];
+          new_deltas[offset + j] = gradients[i] * current_layer.activations[j];
         }
       }
 
       // calc next errors
-      const next_errors = new Array(current_layer.size).fill(0);
       for (let i = 0; i < current_layer.size; i++) {
+        offset = this.next_sizes[layer_index] * i;
         for (let j = 0; j < prev_layer.size; j++) {
-          next_errors[i] += current_layer.weights[i][j] * errors[j];
+          next_errors[i] += current_layer.weights[offset + j] * errors[j];
         }
       }
 
-      // swap errors
-      errors = next_errors.slice(0);
-
       // calc/apply new weights
       for (let i = 0; i < prev_layer.size; i++) {
+        offset = i * current_layer.size;
         for (let j = 0; j < current_layer.size; j++) {
-          current_layer.weights[j][i] += deltas[i][j];
+          current_layer.weights[this.next_sizes[layer_index] * j + i] += new_deltas[offset + j];
         }
       }
 
@@ -165,6 +166,9 @@ export class Network {
       for (let i = 0; i < prev_layer.size; i++) {
         prev_layer.biases[i] += gradients[i];
       }
+
+      // swap errors
+      errors = next_errors.slice(0);
     }
 
     return this;
@@ -186,20 +190,10 @@ export class Network {
     const next_net = new Network(this.layers.map(_ => _.size));
     next_net.layers = this.layers.map((l) => ({
       biases: l.biases.slice(0),
-      weights: l.weights.slice(0).map(_ => _.slice(0)),
+      weights: l.weights.slice(0),
       activations: l.activations.slice(0),
       size: l.size,
     }));
     return next_net;
-  }
-
-  clear(): Network {
-    this.layers = this.layers.map((l) => ({
-      biases: l.biases.slice(0),
-      weights: l.weights.slice(0).map(_ => _.slice(0)),
-      activations: new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * l.size)).fill(0),
-      size: l.size,
-    }));
-    return this;
   }
 }
