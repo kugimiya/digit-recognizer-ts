@@ -69,25 +69,52 @@ export class Network {
     }
   }
 
-  get asJSON() {
-    return JSON.stringify(
-      this.layers.map(layer => [layer.size, [...layer.biases], [...layer.weights]])
-    );
+  set_as_bin(_data: Buffer | ArrayBuffer, is_array_buff = false) {
+    let data: ArrayBuffer;
+
+    if (is_array_buff) {
+      data = _data as ArrayBuffer;
+    } else {
+      data = (_data as Buffer).buffer;
+    }
+
+    let index = 0;
+    const raw_data = new Float64Array(data);
+
+    for (let i = 0; i < this.layers.length; i++) {
+      for (let j = 0; j < this.layers[i].weights.length; j++) {
+        this.layers[i].weights[j] = raw_data[index];
+        index += 1;
+      }
+
+      for (let j = 0; j < this.layers[i].biases.length; j++) {
+        this.layers[i].biases[j] = raw_data[index];
+        index += 1;
+      }
+    }
   }
 
-  set asJSON(json: string) {
-    const raw: [number, number[], number[]][] = JSON.parse(json);
-    raw.forEach(([size, biases, weights], layer_index) => {
-      this.layers[layer_index].size = size;
+  get_as_bin() {
+    const total_size = this.layers.reduce((acc, cur) => acc + cur.weights.length + cur.biases.length, 0);
+    const raw_data = new Float64Array(new SharedArrayBuffer(Float64Array.BYTES_PER_ELEMENT * total_size));
 
-      biases.forEach((bias, index) => {
-        this.layers[layer_index].biases[index] = bias;
-      });
+    console.log(`DBG: creating binary network clone, size is ${Float64Array.BYTES_PER_ELEMENT * total_size} bytes`);
 
-      weights.forEach((neuron_weights, index) => {
-        this.layers[layer_index].weights[index] = neuron_weights;
-      });
-    });
+    let index = 0;
+
+    for (let i = 0; i < this.layers.length; i++) {
+      for (let j = 0; j < this.layers[i].weights.length; j++) {
+        raw_data[index] = this.layers[i].weights[j];
+        index += 1;
+      }
+
+      for (let j = 0; j < this.layers[i].biases.length; j++) {
+        raw_data[index] = this.layers[i].biases[j];
+        index += 1;
+      }
+    }
+
+    return raw_data;
   }
 
   get last_layer(): Layer {

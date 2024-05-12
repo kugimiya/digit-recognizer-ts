@@ -119,18 +119,18 @@ console.log('Load/create network...');
 
 let net_conf = [784, 512, 256, 64, 10];
 let network = new Network(net_conf);
-network.randomize();
 
 let epoch_count = 100;
 let batch_size = 100;
-let learn_rate = 0.0001;
+let learn_rate = 0.001;
 let nice_ratio = 0.985;
 let prev_ratio = 0;
 let true_predicate = 0.85;
 
 try {
-  network.asJSON = readFileSync(path.resolve(__dirname, '..', `weights_${net_conf.join('_')}.json`)).toString();
+  network.set_as_bin(readFileSync(path.resolve(__dirname, '..', `weights_${net_conf.join('_')}.bin`)));
 } catch (e) {
+  network.randomize();
   console.log(`Failed loading "weights_${net_conf.join('_')}.json". Looks like first run :thinking:`);
 }
 
@@ -160,7 +160,7 @@ const runner = async() => {
       appendFileSync(train_stat_name, `${train_count};${result.common_error.toString().replace('.', ',')};${(result.true_predictions / batch_size).toString().replace('.', ',')}\n`);
     }
 
-    writeFileSync(path.resolve(__dirname, '..', `weights_${net_conf.join('_')}.json`), network.asJSON);
+    writeFileSync(path.resolve(__dirname, '..', `weights_${net_conf.join('_')}.bin`), network.get_as_bin());
 
     console.log('Run test dataset');
 

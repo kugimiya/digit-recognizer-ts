@@ -17,9 +17,9 @@ let cY = 0;
 
 let net_conf = [784, 512, 256, 64, 10];
 
-fetch(`weights_${net_conf.join('_')}.json`).then(res => res.json()).then((data) => {
+fetch(`weights_${net_conf.join('_')}.bin`).then(res => res.arrayBuffer()).then((data) => {
   const network = new Network(net_conf);
-  network.asJSON = JSON.stringify(data);
+  network.set_as_bin(data, true);
 
   ready = true;
 
